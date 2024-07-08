@@ -1,0 +1,268 @@
+# -*- coding: utf-8 -*-
+"""
+@authors: M. T., A. V., P. W., K. W. - groupe L
+Jan 24
+"""
+
+import numpy as np
+import timeit
+import random
+from colorama import Fore, Style
+
+class Puissance4:
+    
+    def __init__(self, rows=6, cols=12, connect=4, start_player=2):
+        
+# Initialisation du jeu avec le nombre de lignes = rows, de colonnes = cols et de jetons = connect pour gagner 
+        self.rows = rows
+        self.cols = cols
+        self.connect = connect
+        
+# Initialisation du tableau de jeu avec zéros
+        self.board = np.zeros((rows, cols), dtype=int)
+    
+# Initialisation des variables pour le suivi de la partie 
+        self.game_over = False
+        self.winner = None
+        self.current_player = start_player
+        self.last_move_column = None
+        
+# Affichage du tableau du joueur actuel        
+    def display_current_player(self):
+        print(f"Joueur actuel: {'IA' if self.current_player == 1 else 'Player'} ")
+
+# Affichage du tableau de jeu
+    def display_board(self):
+        col_numbers = " ".join(map(str, range(self.cols)))  # Affichage des numéros des colonnes
+        print(f"{col_numbers}")
+
+        for row in self.board:
+            for cell in row:
+                if cell == 1:
+                    print(Fore.RED + f"{cell} ", end="")
+                elif cell == 2:
+                    print(Fore.BLUE + f"{cell} ", end="")
+                else:
+                    print(Style.RESET_ALL + f"{cell} ", end="")
+            print()
+        print(Style.RESET_ALL)
+
+# Vérification si un mouvement est valide dans une colonne donnée
+    def is_valid_move(self, col):
+        return self.board[0, col] == 0
+
+# Effectue le mouvement dans la colonne pour le joueur donné  
+    def make_move(self, col, player):
+        for row in range(self.rows - 1, -1, -1):
+            if self.board[row, col] == 0:
+                self.board[row, col] = player
+                break
+
+# Vérification s'il y a un gagnant dans les lignes, colonnes et diagonales  
+    def check_winner(self, player):
+        for row in range(self.rows):
+            for col in range(self.cols - (self.connect - 1)):
+                if np.all(self.board[row, col:col + self.connect] == player):
+                    return True
+        
+        for row in range(self.rows - (self.connect - 1)):
+            for col in range(self.cols):
+                if np.all(self.board[row:row + self.connect, col] == player):
+                    return True
+                
+        for row in range(self.rows - (self.connect - 1)):
+            for col in range(self.cols - (self.connect - 1)):
+                if np.all(np.diagonal(self.board[row:row + self.connect, col:col + self.connect]) == player):
+                    return True
+                if np.all(np.diagonal(np.flipud(self.board[row:row + self.connect, col:col + self.connect])) == player):
+                    return True
+        return False
+
+# Vérification si le tableau est complètement rempli
+    def is_full(self):
+        return np.all(self.board != 0)
+
+# Retourne la liste des colonnes où un mouvement est possible 
+    def get_valid_moves(self):
+        return [col for col in range(self.cols) if self.board[0, col] == 0]
+
+# Vérification si le jeu est terminé (quelqu'un a gagné ou le tableau est plein)  
+    def is_terminal_mode(self):
+        return self.check_winner(1) or self.check_winner(2) or self.is_full()
+
+# Calcul de l'heuristique du joueur dans le tableau de jeu
+    def calcul_heuristique(self, player):
+        Nb = [[0 for _ in range(self.cols)] for _ in range(self.rows)]
+        # Initialisation d'une matrice pour compter les séquences de jetons dans différentes directions
+    
+        # Parcours de toutes les positions possibles dans le tableau de jeu
+        for i in range(self.rows):
+            for j in range(self.cols):
+                for (x, y) in [(1, 0), (0, 1), (1, 1), (1, -1)]:
+                # Parcours des directions : horizontale (1,0), verticale (0,1), diagonale (1,1), diagonale inversée (1,-1)
+                    if self.est_dans_intervalle(i + (self.connect - 1) * x, j + (self.connect - 1) * y):
+                        # Vérification si la séquence de jetons est dans les limites du tableau
+                        for k in range(self.connect):
+                            Nb[i + k * x][j + k * y] += 1
+                            # Incrémentation de compteurs pour chaque jeton des séquences
+    
+        # Calcul de la valeur heuristique en sommant les compteurs pour les positions du joueur
+        valeur_heuristique = sum(Nb[i][j] for i in range(self.rows) for j in range(self.cols) if self.board[i][j] == player)
+        return valeur_heuristique
+
+# Vérification si une position est dans les limites du tableau de jeu
+    def est_dans_intervalle(self, row, col):
+        return 0 <= row < self.rows and 0 <= col < self.cols
+        # Vérification des bornes pour la ligne et la colonne
+
+# Fonction d'évaluation pour cet exemple
+    def evaluate_board(self):
+        player = 1
+        opponent = 2
+
+        if self.check_winner(player):
+            return 1000
+        elif self.check_winner(opponent):
+            return -1000
+        else:
+            heuristic_value = self.calcul_heuristique(player) - self.calcul_heuristique(opponent)
+            return heuristic_value
+
+# Algorithme Minimax avec élagage Alpha-Beta
+    def minimax(self, depth, maximizing_player, alpha, beta):
+        valid_moves = self.get_valid_moves()
+
+        if depth == 0 or self.is_terminal_mode(): # Si la profondeur maximale est atteinte ou le jeu est terminé, évaluation du tableau      
+            return self.evaluate_board(), None
+
+        if maximizing_player : # Si c'est le tour du joueur maximisant (càd l'IA)
+            value = float('-inf')
+            for col in valid_moves:
+                temp_board = self.board.copy()
+                self.make_move(col, 1)
+                new_value, _ = self.minimax(depth - 1, False, alpha, beta)
+                self.board = temp_board
+                if new_value > value:
+                    value = new_value
+                    best_move = col
+                    alpha = max(alpha, value)
+                    if alpha >= beta:
+                        break
+            return value, best_move
+                    
+        else:
+            value = float('inf')
+            for col in valid_moves:
+                temp_board = self.board.copy()
+                self.make_move(col, 2)
+                new_value, _ = self.minimax(depth - 1, True, alpha, beta)
+                self.board = temp_board
+                if new_value < value:
+                    value = new_value
+                    best_move = col
+                    beta = min(beta, value)
+                    if alpha >= beta:
+                        break
+            return value, best_move
+
+# Choix du meilleur mouvement par l'IA en utilisant Minimax avec élagage Alpha-Beta
+    def make_best_move(self, player_to_block=None):
+        # Priorité pour les colonnes pour gagner (côté offensif)
+        for col in self.get_valid_moves():
+            temp_board = self.board.copy()
+            self.make_move(col, 1)
+            if self.check_winner(1):
+                self.board = temp_board
+                self.make_move(col, 1)
+                self.last_move_column = col
+                return
+            self.board = temp_board
+    
+        # Bloquer les victoires imminentes de l'adversaire (côté défensif)
+        for col in self.get_valid_moves():
+            temp_board = self.board.copy()
+            self.make_move(col, 2)
+            if self.check_winner(2):
+                self.board = temp_board
+                self.make_move(col, 1)
+                self.last_move_column = col
+                return
+            self.board = temp_board
+    
+        _, best_move = self.minimax(3, True, float('-inf'), float('inf')) 
+        
+        self.make_move(best_move, 1)
+        self.last_move_column = best_move
+
+# Changement du joueur 
+    def switch_player(self):
+        self.current_player = 3 - self.current_player # Alternance entre les joueurs 1 et 2 
+
+    def play_turn(self):
+        start_time = None
+        end_time =  None
+        col = None
+    
+        if self.current_player == 2: # Gère le tour de jeu du joueur ou de l'IA
+            col = self.get_player_move()
+            self.make_move(col, 2)
+            print(f"Le joueur {self.current_player} a joué à la colonne {col}")
+    
+        else:
+            try:
+                start_time = timeit.default_timer()
+                self.make_best_move()
+            except Exception as e:
+                print(f"Erreur lors de l'appel à timeit.default_timer(): {e}")
+            finally:
+                end_time = timeit.default_timer()
+                col = self.last_move_column
+                print(f"L'IA a joué à la colonne {col}")
+        self.display_board()
+        
+        if start_time is not None and end_time is not None:
+            print(f"Temps pris par l'IA : {end_time - start_time} secondes")
+
+# Obtention du mouvement du joueur
+    def get_player_move(self):
+        while True:
+            try:
+                col = int(input("Joueur 2, choisissez une colonne (0-11): "))
+                if col in self.get_valid_moves():
+                    return col
+                else:
+                    print("Mouvement invalide. Réessayez.")
+            except ValueError:
+                print("Veuillez entrer un numéro de colonne valide.")
+
+
+#%% Exemple d'utilisation
+
+if __name__ == "__main__":
+    start_choice = int(input("Choisissez qui commence (1 pour l'IA, 2 pour le joueur): "))
+    print("Puissance 4 - Nouvelle partie démarrée !")
+    game = Puissance4(rows=6, cols=12, connect=4, start_player=start_choice)
+    
+    if start_choice == 1:
+        col = random.choice(game.get_valid_moves())
+        game.make_move(col, 1)
+        game.display_board()
+        print(f"Le joueur 1 a joué à la colonne {col}")
+        
+        game.switch_player()
+        
+    while not game.game_over:
+        game.display_current_player()
+        game.play_turn()
+        
+        if game.check_winner(1):
+            print("L'IA a gagné !")
+            break
+        elif game.check_winner(2):
+            print("Vous avez gagné !")
+            break
+        elif game.is_full():
+            print("Match nul !")
+            break
+
+        game.switch_player()
