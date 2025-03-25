@@ -1,4 +1,4 @@
-# School-projects-23-24
+# Academic-projects-in-2023-2024
 
 Connect 4 (Python) : it's playable as player vs the programmed AI. If played against another AI, many improvements are yet to be made.
 
